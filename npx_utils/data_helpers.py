@@ -69,6 +69,22 @@ def extract_spikes(
     return spikes
 
 
+def extract_all_spikes(
+    data: NDArray[np.int_],
+    times_multi: list[NDArray[np.float_]],
+    clust_ids: int,
+    pre_samples: int,
+    post_samples: int,
+    max_spikes: int,
+):
+    spikes = {}
+    for clust_id in clust_ids:
+        spikes[clust_id] = extract_spikes(
+            data, times_multi, clust_id, pre_samples, post_samples, max_spikes
+        )
+    return spikes
+
+
 def calc_mean_and_std_wf(
     params: dict[str, Any],
     n_clusters: int,
