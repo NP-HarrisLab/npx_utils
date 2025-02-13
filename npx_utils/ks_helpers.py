@@ -3,16 +3,20 @@ import re
 
 import numpy as np
 
+
 def is_run_folder(folder):
-    pattern = re.compile(r'.*_g\d+$')
-    return pattern.match(folder)
+    pattern = re.compile(r".*_g\d+$")
+    return pattern.match(folder) != None
+
 
 def get_ks_folders(root_dir, ks_version="4", catgt=True):
     """
     Find all kilosort folders in the root_dir for given ks_version. Will aslo only find those in catgt folders or non-catgt.
     """
     if is_run_folder(root_dir) and catgt:
-        root_dir = os.path.join(os.path.dirname(root_dir), f"catgt_{os.path.basename(root_dir)}")
+        root_dir = os.path.join(
+            os.path.dirname(root_dir), f"catgt_{os.path.basename(root_dir)}"
+        )
     if ks_version == "2.5":
         ks_version = "25"
     pattern = re.compile(r"imec\d_ks\d+$")
