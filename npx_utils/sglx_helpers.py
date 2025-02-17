@@ -1,6 +1,6 @@
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 
 import numpy as np
 from scipy.stats import mode
@@ -9,20 +9,19 @@ from .ks_helpers import load_params
 
 
 def read_meta(meta_path):
-    if type(meta_path) == str:
-        meta_path = Path(meta_path)
     meta_dict = {}
-    if meta_path.exists():
-        with meta_path.open() as f:
-            mdatList = f.read().splitlines()
-            # convert the list entries into key value pairs
-            for m in mdatList:
-                csList = m.split(sep="=")
-                if csList[0][0] == "~":
-                    currKey = csList[0][1 : len(csList[0])]
-                else:
-                    currKey = csList[0]
-                meta_dict.update({currKey: csList[1]})
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            mdatList = f.read()
+        mdatList = mdatList.splitlines()
+        # convert the list entries into key value pairs
+        for m in mdatList:
+            csList = m.split(sep="=")
+            if csList[0][0] == "~":
+                currKey = csList[0][1 : len(csList[0])]
+            else:
+                currKey = csList[0]
+            meta_dict.update({currKey: csList[1]})
     else:
         print("no meta file")
 
