@@ -83,31 +83,6 @@ def _sliding_RP_viol(
     confs = 1 - stats.poisson.cdf(sum_res, max_conts_max)
     rp_viol = 1 - confs.max()
 
-    # Plotting the results
-    plt.figure(figsize=(10, 10))
-
-    # Original ACG
-    correlogram = np.concatenate((correlogram[::-1], correlogram))
-    plt.subplot(2, 1, 1)
-    plt.plot(correlogram, label="Original Half ACG", color="blue")
-    plt.title("Original Half ACG")
-    plt.xlabel("Time (bins)")
-    plt.ylabel("ACG Value")
-    plt.legend()
-
-    # Smoothed ACG
-    smoothed_acg = np.concatenate((smoothed_acg[::-1], smoothed_acg))
-    plt.subplot(2, 1, 2)
-    plt.plot(smoothed_acg, label="Smoothed ACG", color="red")
-    plt.title("Smoothed ACG")
-    plt.xlabel("Time (bins)")
-    plt.ylabel("Smoothed ACG Value")
-    plt.legend()
-
-    # Display the plots
-    plt.tight_layout()
-    plt.show()
-
     return rp_viol
 
 
