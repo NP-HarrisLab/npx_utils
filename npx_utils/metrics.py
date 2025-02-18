@@ -13,7 +13,7 @@ def calc_sliding_RP_viol(
     clust_ids: NDArray[np.int_],
     n_clust: int,
     bin_size=0.25,
-    acceptThresh: float = 0.25,
+    acceptThresh: float = 0.1,
     window_size: float = 2,
     overlap_tol: int = 5,
 ):
@@ -26,7 +26,7 @@ def calc_sliding_RP_viol(
             RP_viol[i] = 0
         else:
             acg = auto_correlogram(
-                times_multi[i], window_size, bin_size / 1000, overlap_tol / 30000
+                times, window_size, bin_size / 1000, overlap_tol / 30000
             )
             RP_viol[i] = _sliding_RP_viol(
                 acg,
