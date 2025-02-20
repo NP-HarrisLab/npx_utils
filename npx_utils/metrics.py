@@ -43,7 +43,7 @@ def _sliding_RP_viol(
     acceptThresh: float = 0.1,
 ) -> float:
     """
-    Calculate the sliding refractory period violation confidence for each cluster.
+    Calculate the sliding refractory period violation confidence for a cluster.
     Args:
         times_multi (list[NDArray[np.float_]]): A list of arrays containing spike times for each cluster.
         clust_ids (NDArray[np.int_]): An array indicating cluster_ids to process. Should be "good" clusters.
@@ -53,11 +53,11 @@ def _sliding_RP_viol(
         window_size (float, optional): The size of the window to calculate refractory period violations in s. Defaults to 2.
         overlap_tol (int, optional): The tolerance for overlap in samples. Defaults to 5.
     Returns:
-        NDArray[np.float32]: An array containing the refractory period violation confidence for each cluster.
+        float: The refractory period violation confidence for the cluster.
     """
-    # create various refractory periods sizes to test (between 0 and 10.25 ms)
-    b = np.arange(0, 10.25, bin_size) / 1000
-    bTestIdx = np.array([1, 2, 4, 6, 8, 12, 16, 20, 24, 28, 32, 36, 40], dtype="int8")
+    # create various refractory periods sizes to test (between 0 and 20x bin size)
+    b = np.arange(0, 21 * bin_size, bin_size) / 1000
+    bTestIdx = np.array([1, 2, 4, 6, 8, 12, 16, 20], dtype="int8")
     bTest = [b[i] for i in bTestIdx]
 
     # calculate and avg halves of acg to ensure symmetry
@@ -66,11 +66,11 @@ def _sliding_RP_viol(
     correlogram = (correlogram[half_len:] + correlogram[:half_len][::-1]) / 2
 
     acg_cumsum = np.cumsum(correlogram)
-    sum_res = acg_cumsum[bTestIdx - 1]  # -1 bc 0th bin corresponds to 0-0.5 ms
+    sum_res = acg_cumsum[bTestIdx - 1]  # -1 bc 0th bin corresponds to 0-bin_size ms
 
     # low-pass filter acg and use max as baseline event rate
     order = 4  # Hz
-    cutoff_freq = 100  # Hz
+    cutoff_freq = 250  # Hz
     fs = 1 / bin_size * 1000
     nyqist = fs / 2
     cutoff = cutoff_freq / nyqist
@@ -126,7 +126,6 @@ def x_correlogram(
         c1_times (NDArray[np.float_]): Cluster 2 spike times (sorted least to greatest) '
             in seconds.
         window_size (float): Width of cross correlogram window in seconds.
-            Defaults to 1 ms.
         bin_width (float): Width of cross correlogram bins in seconds.
         overlap_tol (float): Overlap tolerance in seconds. Spikes within
             the tolerance of the reference spike time will not be counted for cross
