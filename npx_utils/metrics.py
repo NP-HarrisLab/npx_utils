@@ -11,7 +11,6 @@ from tqdm import tqdm
 def calc_sliding_RP_viol(
     times_multi: dict[NDArray[np.float_]],
     clust_ids: NDArray[np.int_],
-    n_clust: int,
     bin_size=0.25,
     acceptThresh: float = 0.1,
     window_size: float = 2,
