@@ -6,18 +6,19 @@ from tqdm import tqdm
 from .ks_helpers import get_probe_id
 
 
-def copy_folder_with_progress(src, dest):
+def copy_folder_with_progress(src, dest, overwrite=False):
     """
     Copies a folder from src to dest with a progress bar.
     """
     # Get the list of all files and directories
+    tqdm.write(f"Copying from {src} to {dest}")
     files_and_dirs = []
     for root, _, files in os.walk(src):
         for file in files:
             files_and_dirs.append(os.path.join(root, file))
 
     # Initialize the progress bar
-    for item in tqdm(files_and_dirs, desc="Copying files", unit=" file"):
+    for item in tqdm(files_and_dirs, desc=f"Copying files...", unit=" file"):
         # Determine destination path
         relative_path = os.path.relpath(item, src)
         dest_path = os.path.join(dest, relative_path)
@@ -29,7 +30,9 @@ def copy_folder_with_progress(src, dest):
         try:
             if os.path.exists(dest_path):
                 # Check if the file is the same size
-                if os.path.getsize(item) == os.path.getsize(dest_path):
+                if overwrite:
+                    os.remove(dest_path)
+                elif os.path.getsize(item) == os.path.getsize(dest_path):
                     continue
             shutil.copy2(item, dest_path)
         except Exception as e:
