@@ -70,6 +70,24 @@ def get_meta_path(ks_folder, params=None):
     return meta_path
 
 
+def get_lfp_binary_path(ks_folder, params=None):
+    """
+    Get the path to the lfp binary file.
+    """
+    binary_path = get_binary_path(ks_folder, params)
+    lfp_binary_path = binary_path.replace(".ap.bin", ".lf.bin")
+    return lfp_binary_path
+
+
+def get_lfp_meta_path(ks_folder, params=None):
+    """
+    Get the path to the lfp meta file.
+    """
+    binary_path = get_lfp_binary_path(ks_folder, params)
+    lfp_meta_path = binary_path.replace(".bin", ".meta")
+    return lfp_meta_path
+
+
 def get_n_channels(ks_folder, params=None):
     """
     Get the number of channels from the params file.

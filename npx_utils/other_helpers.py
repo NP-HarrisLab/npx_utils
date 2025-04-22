@@ -11,6 +11,9 @@ def copy_folder_with_progress(src, dest, overwrite=False):
     Copies a folder from src to dest with a progress bar.
     """
     # Get the list of all files and directories
+    # check if src and dest are the same
+    if os.path.abspath(src) == os.path.abspath(dest):
+        return
     tqdm.write(f"Copying from {src} to {dest}")
     files_and_dirs = []
     for root, _, files in os.walk(src):

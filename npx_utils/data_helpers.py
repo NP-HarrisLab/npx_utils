@@ -158,6 +158,73 @@ def calc_mean_wf(
     return mean_wf
 
 
+def calc_mean_wf_split(
+    params: dict[str, Any],
+    n_clusters: int,
+    cluster_ids: list[int],
+    spike_times: list[NDArray[np.int_]],
+    data: NDArray[np.int_],
+    n_splits: int = 2,
+):
+    if n_splits < 2:
+        raise ValueError("n_splits must be at least 2. Otherwise use calc_mean_wf.")
+
+    mean_wf_path = os.path.join(
+        params["KS_folder"], f"mean_waveforms_{n_splits}split.npy"
+    )
+
+    if os.path.exists(mean_wf_path):
+        mean_wf = np.load(mean_wf_path)
+        # recalculate mean_wf if it is not the right shape
+        if mean_wf.shape[0] == n_clusters:
+            if np.any(np.isnan(mean_wf)):
+                mean_wf = np.nan_to_num(mean_wf, nan=0)
+                # save the fixed mean waveform
+                np.save(mean_wf_path, mean_wf)
+
+            return mean_wf
+
+    mean_wf = cp.zeros(
+        (
+            n_clusters,
+            params["n_chan"],
+            params["pre_samples"] + params["post_samples"],
+            n_splits,
+        )
+    )
+    for i in tqdm(cluster_ids, desc="Calculating mean waveforms"):
+        spikes = extract_spikes(
+            data,
+            spike_times,
+            i,
+            params["pre_samples"],
+            params["post_samples"],
+            params["max_spikes"],
+        )
+        if len(spikes) > 0:  # edge case
+            spikes_cp = cp.array(spikes, dtype=cp.float32)
+            for split in range(n_splits):
+                # Split the spikes into n_splits parts
+                split_size = spikes_cp.shape[0] // n_splits
+                start = split * split_size
+                end = (split + 1) * split_size if split != n_splits - 1 else None
+                mean_wf[i, :, :, split] = cp.mean(spikes_cp[start:end], axis=0)
+
+    # convert mean_wf uV
+    meta = read_meta(params["meta_path"])
+    bits_to_uV = get_bits_to_uV(meta)  # convert from bits to uV
+    bits_to_uV = cp.float32(bits_to_uV)  # convert to cupy float32
+    mean_wf *= bits_to_uV
+
+    tqdm.write("Saving mean waveforms...")
+    cp.save(mean_wf_path, mean_wf)
+
+    # Convert back to numpy arrays for compatibility
+    mean_wf = cp.asnumpy(mean_wf)
+
+    return mean_wf
+
+
 def find_times_multi_ks(
     ks_folder: str,
     clust_ids: list[int] = None,
@@ -198,7 +265,7 @@ def find_times_multi(
             spike. Defaults to 62.
 
     Returns:
-        cl_times (dict): found cluster spike times.
+        cl_times (dict): found cluster spike times in samples.
     """
     times_multi = {}
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import mode
 
-from .ks_helpers import load_params
+from .ks_helpers import get_lfp_meta_path, load_params
 
 
 def read_meta(meta_path):
@@ -124,3 +124,20 @@ def get_data_memmap(ks_folder):
     data = np.memmap(params["dat_path"], dtype="int16", mode="r")
     data = np.reshape(data, (-1, params["n_channels_dat"]))
     return data
+
+
+def get_lfp_memmap(ks_folder):
+    """
+    Load the data from the binary file as a memory-mapped array.
+    """
+    params = load_params(ks_folder)
+    lfp_path = params["dat_path"].replace(".ap.bin", ".lf.bin")
+    data = np.memmap(lfp_path, dtype="int16", mode="r")
+    data = np.reshape(data, (-1, params["n_channels_dat"]))
+    return data
+
+
+def get_lfp_sample_rate(ks_folder):
+    meta_path = get_lfp_meta_path(ks_folder)
+    meta = read_meta(meta_path)
+    return float(meta["imSampRate"])
