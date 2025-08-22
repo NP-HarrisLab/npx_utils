@@ -1,9 +1,11 @@
 import os
 import shutil
+from datetime import datetime
 
 from tqdm import tqdm
 
-from .ks_helpers import get_probe_id
+from .ks_helpers import get_meta_path, get_probe_id
+from .sglx_helpers import read_meta
 
 
 def copy_folder_with_progress(src, dest, overwrite=False):
@@ -42,13 +44,39 @@ def copy_folder_with_progress(src, dest, overwrite=False):
             print(f"Error copying {item} to {dest_path}: {e}")
 
 
-def get_probe_folders(ks_folders, catgt_only=True):
+def get_probe_folders(ks_folders):
     probe_folders = {}
     for ks_folder in ks_folders:
         probe_num = get_probe_id(ks_folder)
         if probe_num not in probe_folders:
             probe_folders[probe_num] = []
-        catgt_folder = ks_folder.split(os.sep)[-3]
-        if not catgt_only or catgt_folder.startswith("catgt_"):
-            probe_folders[probe_num].append(ks_folder)
+        probe_folders[probe_num].append(ks_folder)
     return probe_folders
+
+
+def get_details(ks_folder, drug_dict=None):
+    """
+    Get the details of the kilosort folder.
+    Assumes imro file is named in the form of subject_region.imro
+    """
+    meta_path = get_meta_path(ks_folder)
+    meta = read_meta(meta_path)
+    imroFile = os.path.basename(meta["imroFile"])
+    subject, region = imroFile.split("_")[:2]
+    region = region.split(".")[0]
+    if drug_dict is not None:
+        drug = drug_dict.get(subject, "unknown")
+    else:
+        drug = "unknown"
+    date_obj = datetime.fromisoformat(meta["fileCreateTime"])
+    date = date_obj.strftime("%Y%m%d")
+    probe_num = get_probe_id(ks_folder)
+
+    details = {
+        "subject": subject,
+        "region": region,
+        "date": date,
+        "probe_num": probe_num,
+        "drug": drug,
+    }
+    return details

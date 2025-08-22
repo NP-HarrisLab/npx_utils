@@ -6,28 +6,55 @@ import numpy as np
 
 def is_run_folder(folder):
     pattern = re.compile(r".*_g\d+$")
+    # ignore those that have SvyPrb in the name
+    if "SvyPrb" in folder:
+        return False
+    if "old" in folder:
+        return False
     return pattern.match(folder) != None
 
 
-def get_ks_folders(root_dir, ks_version="4", catgt=True):
+def get_ks_folders(root_dir, ks_version="4", subfolders=True):
     """
-    Find all kilosort folders in the root_dir for given ks_version. Will aslo only find those in catgt folders or non-catgt.
+    Find all kilosort folders in the root_dir for given ks_version. if subfolders is true, only one recording or supercat recording session in folder.
     """
-    if is_run_folder(root_dir) and catgt:
-        root_dir = os.path.join(
-            os.path.dirname(root_dir), f"catgt_{os.path.basename(root_dir)}"
-        )
     if ks_version == "2.5":
         ks_version = "25"
-    pattern = re.compile(r"imec\d_ks\d+$")
+    pattern = re.compile(rf"imec\d+_ks{ks_version}$")
     matching_folders = []
     for root, dirs, _ in os.walk(root_dir):
         if "$RECYCLE.BIN" in root:
             continue
-        for dir in dirs:
-            if pattern.match(dir) and (not catgt or "catgt" in root):
-                if dir.split("_")[1] == f"ks{ks_version}":
+        if subfolders:
+            root_base = os.path.basename(root)
+            supercat_dir = (
+                root if root_base.startswith("supercat_") else None
+            ) or next(
+                (os.path.join(root, d) for d in dirs if d.startswith("supercat_")), None
+            )
+            catgt_dir = (root if root_base.startswith("catgt_") else None) or next(
+                (os.path.join(root, d) for d in dirs if d.startswith("catgt_")), None
+            )
+
+            selected_dir = supercat_dir or catgt_dir
+            if selected_dir:
+                for sub_root, sub_dirs, _ in os.walk(selected_dir):
+                    for sub_dir in sub_dirs:
+                        if pattern.match(sub_dir):
+                            matching_folders.append(os.path.join(sub_root, sub_dir))
+                dirs[:] = []  # Clear dirs to prevent os.walk from going deeper
+        else:
+            for dir in dirs:
+                if pattern.match(dir):
                     matching_folders.append(os.path.join(root, dir))
+    # TO DO make better Remove duplicates
+    matching_folders = list(set(matching_folders))
+    # remove any folders with "old" or "SvyPrb" in the name
+    matching_folders = [
+        folder
+        for folder in matching_folders
+        if "old" not in folder and "SvyPrb" not in folder
+    ]
     return matching_folders
 
 
@@ -103,7 +130,7 @@ def get_probe_id(ks_folder):
     """
     folders = ks_folder.split(os.sep)
     probe_id = re.search(r"(?<=imec)\d+(?=_)", folders[-1]).group(0)
-    return probe_id
+    return int(probe_id)
 
 
 def get_sample_rate(ks_folder, params=None):
