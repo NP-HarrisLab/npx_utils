@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 
 def calc_sliding_RP_viol(
-    times_multi: dict[NDArray[np.float_]],
+    times_multi: dict[NDArray[np.float64]],
     clust_ids: NDArray[np.int_],
     bin_size=0.25,
     acceptThresh: float = 0.1,
@@ -44,13 +44,9 @@ def _sliding_RP_viol(
     """
     Calculate the sliding refractory period violation confidence for a cluster.
     Args:
-        times_multi (list[NDArray[np.float_]]): A list of arrays containing spike times for each cluster.
-        clust_ids (NDArray[np.int_]): An array indicating cluster_ids to process. Should be "good" clusters.
-        n_clust (int): The total number of clusters (shape of mean_wf or max_clust_id + 1).
-        bin_size (float, optional): The size of each bin in milliseconds. Defaults to 0.25.
-        acceptThresh (float, optional): The threshold for accepting refractory period violations. Defaults to 0.25.
-        window_size (float, optional): The size of the window to calculate refractory period violations in s. Defaults to 2.
-        overlap_tol (int, optional): The tolerance for overlap in samples. Defaults to 5.
+        correlogram (NDArray): The auto-correlogram of the cluster.
+        bin_size (float, optional): The size of each bin in ms. Defaults to 0.25.
+        acceptThresh (float, optional): The threshold for accepting refractory period violations. Defaults to 0.1.
     Returns:
         float: The refractory period violation confidence for the cluster.
     """
@@ -86,11 +82,11 @@ def _sliding_RP_viol(
 
 
 def auto_correlogram(
-    c1_times: NDArray[np.float_],
+    c1_times: NDArray[np.float64],
     window_size: float,
     bin_width: float,
     overlap_tol: float,
-) -> NDArray[np.float_]:
+) -> NDArray[np.float64]:
     """
     Calculates the auto-correlogram for a spike train.
 
@@ -110,19 +106,19 @@ def auto_correlogram(
 
 
 def x_correlogram(
-    c1_times: NDArray[np.float_],
-    c2_times: NDArray[np.float_],
+    c1_times: NDArray[np.float64],
+    c2_times: NDArray[np.float64],
     window_size: float,
     bin_width: float,
     overlap_tol: float,
-) -> NDArray[np.float_]:
+) -> NDArray[np.float64]:
     """
     Calculates the cross-correlogram for two spike trains.
 
     Args:
-        c1_times (NDArray[np.float_]): Cluster 1 spike times (sorted least to greatest)
+        c1_times (NDArray[np.float64]): Cluster 1 spike times (sorted least to greatest)
             in seconds.
-        c1_times (NDArray[np.float_]): Cluster 2 spike times (sorted least to greatest) '
+        c1_times (NDArray[np.float64]): Cluster 2 spike times (sorted least to greatest) '
             in seconds.
         window_size (float): Width of cross correlogram window in seconds.
         bin_width (float): Width of cross correlogram bins in seconds.
@@ -131,7 +127,7 @@ def x_correlogram(
             correlogram calculation.
 
     Returns:
-        NDArray[np.float_]: The calculated cross-correlogram.
+        NDArray[np.float64]: The calculated cross-correlogram.
     """
 
     return _correlogram(c1_times, c2_times, window_size, bin_width, overlap_tol)
