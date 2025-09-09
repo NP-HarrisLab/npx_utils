@@ -6,7 +6,12 @@ import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from npx_utils.sglx_helpers import get_bits_to_uV, get_data_memmap, read_meta
+from npx_utils.sglx.sglx_helpers import (
+    get_bits_to_uV,
+    get_channel_counts,
+    get_data_memmap,
+    read_meta,
+)
 
 
 def extract_spikes(
@@ -143,17 +148,20 @@ def calc_mean_wf(
 
     # convert mean_wf uV
     meta = read_meta(params["meta_path"])
-    bits_to_uV = get_bits_to_uV(meta)  # convert from bits to uV
-    bits_to_uV = cp.float32(bits_to_uV)  # convert to cupy float32
-    mean_wf *= bits_to_uV
+    nAP = get_channel_counts(meta)[0]
+    bits_to_uV = get_bits_to_uV(np.arange(nAP), meta)
+    bits_to_uV = cp.array(bits_to_uV)
+    # kept sync on current mean_wf so just add 1 to bits_to_uV
+    bits_to_uV = cp.append(bits_to_uV, 1)
+    mean_wf_uV = mean_wf * bits_to_uV[cp.newaxis, :, cp.newaxis]
 
     tqdm.write("Saving mean waveforms...")
-    cp.save(mean_wf_path, mean_wf)
+    cp.save(mean_wf_path, mean_wf_uV)
 
     # Convert back to numpy arrays for compatibility
-    mean_wf = cp.asnumpy(mean_wf)
+    mean_wf_uV = cp.asnumpy(mean_wf_uV)
 
-    return mean_wf
+    return mean_wf_uV
 
 
 def calc_mean_wf_split(
@@ -212,17 +220,20 @@ def calc_mean_wf_split(
 
     # convert mean_wf uV
     meta = read_meta(params["meta_path"])
-    bits_to_uV = get_bits_to_uV(meta)  # convert from bits to uV
-    bits_to_uV = cp.float32(bits_to_uV)  # convert to cupy float32
-    mean_wf *= bits_to_uV
+    nAP = get_channel_counts(meta)[0]
+    bits_to_uV = get_bits_to_uV(np.arange(nAP), meta)
+    bits_to_uV = cp.array(bits_to_uV)
+    # kept sync on current mean_wf so just add 1 to bits_to_uV
+    bits_to_uV = cp.append(bits_to_uV, 1)
+    mean_wf_uV = mean_wf * bits_to_uV[cp.newaxis, :, cp.newaxis, cp.newaxis]
 
     tqdm.write("Saving mean waveforms...")
-    cp.save(mean_wf_path, mean_wf)
+    cp.save(mean_wf_path, mean_wf_uV)
 
     # Convert back to numpy arrays for compatibility
-    mean_wf = cp.asnumpy(mean_wf)
+    mean_wf_uV = cp.asnumpy(mean_wf_uV)
 
-    return mean_wf
+    return mean_wf_uV
 
 
 def find_times_multi_ks(

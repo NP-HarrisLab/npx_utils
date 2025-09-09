@@ -5,7 +5,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 from .ks_helpers import get_meta_path, get_probe_id
-from .sglx_helpers import read_meta
+from .sglx.sglx_helpers import read_meta
 
 
 def copy_folder_with_progress(src, dest, overwrite=False):
