@@ -4,6 +4,8 @@ from datetime import datetime
 
 from tqdm import tqdm
 
+import npx_utils as npx
+
 from .ks_helpers import get_meta_path, get_probe_id
 from .sglx.sglx_helpers import read_meta
 
@@ -80,3 +82,53 @@ def get_details(ks_folder, drug_dict=None):
         "drug": drug,
     }
     return details
+
+
+def get_run_folders(subject_folder):
+    day_folders = [
+        os.path.join(subject_folder, folder)
+        for folder in os.listdir(subject_folder)
+        if os.path.isdir(os.path.join(subject_folder, folder))
+        and ("SvyPrb" not in folder)
+        and ("old" not in folder)
+    ]
+
+    run_folders = []
+    for day_folder in day_folders:
+        possible_run_folders = [
+            os.path.join(day_folder, folder)
+            for folder in os.listdir(day_folder)
+            if npx.is_run_folder(folder)
+        ]
+        # find one with supercat
+        supercat_folders = [
+            folder for folder in possible_run_folders if "supercat" in folder
+        ]
+        if len(supercat_folders) > 1:
+            raise ValueError(
+                f"Multiple supercat folders found in {day_folder}: {supercat_folders}"
+            )
+        if len(supercat_folders) == 1:
+            run_folders.append(supercat_folders[0])
+        else:
+            # find catgt folders
+            catgt_folders = [
+                folder for folder in possible_run_folders if "catgt" in folder
+            ]
+            if len(catgt_folders) > 1:
+                raise ValueError(
+                    f"Multiple catgt folders found in {day_folder}: {catgt_folders}"
+                )
+            if len(catgt_folders) == 1:
+                run_folders.append(catgt_folders[0])
+            else:
+                if len(possible_run_folders) == 1:
+                    run_folders.append(possible_run_folders[0])
+                elif len(possible_run_folders) == 0:
+                    continue
+                else:
+                    raise ValueError(
+                        f"Multiple run folders found in {day_folder}: {possible_run_folders}"
+                    )
+    run_folders.sort()
+    return run_folders

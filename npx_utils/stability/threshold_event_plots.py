@@ -39,7 +39,6 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib as mpl
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
@@ -47,6 +46,7 @@ from matplotlib.patches import Rectangle
 from tqdm import tqdm
 
 import npx_utils as npx
+from npx_utils import get_run_folders
 from npx_utils.sglx._SGLXMetaToCoords import MetaToCoords
 from npx_utils.sglx.sglx_helpers import (
     ChanGainsIM,
@@ -256,9 +256,18 @@ def plotOne(drift_data):
 
 
 def plotMult(bin_list, drift_list, day_list):
+    """
+    Plots raster plot of spikes for each shank across recording sessions to give estimate of drift.
+    """
     # build a large sampled array from the n_sets, to look for 'obvious' drift
     sh_inds = [0, 1, 2, 3]
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(13, 8), sharex=True, sharey=False)
+    fig, ax = plt.subplots(
+        nrows=2,
+        ncols=2,
+        figsize=(0.25 + 1 * len(bin_list), 8),
+        sharex=True,
+        sharey=False,
+    )
     fig.suptitle("Spike Drift Across Shanks", fontsize=16)
     max_spike = 50000  # total spikes in the output plot
     even_divisor = 10  # color and z limits will be integer multiples of this value
@@ -354,6 +363,8 @@ def plotMult(bin_list, drift_list, day_list):
             alpha=0.6,
             zorder=5,  # Draw lines behind data points but in front of the grid
         )
+        if global_segment_endpoints.size > 0:
+            single_ax.set_xlim(0, global_segment_endpoints[-1])
     bottom_ax = ax[1, 0]
     all_boundaries = np.concatenate(([0], global_segment_endpoints))
     label_positions = (all_boundaries[:-1] + all_boundaries[1:]) / 2
@@ -361,11 +372,12 @@ def plotMult(bin_list, drift_list, day_list):
     bottom_ax.set_xticks(label_positions)
     bottom_ax.set_xticklabels(labels)
     # Add a single X-axis label for the whole figure
-    fig.supylabel("Distance from tip (µm)", x=0.06, fontsize=14)
+    fig.supylabel("Distance from tip (µm)", x=0.08, fontsize=14)
     fig.supxlabel("Recording Session", y=0.02, fontsize=14)
 
     cbar = fig.colorbar(scatter, ax=ax.ravel().tolist(), pad=0.01, aspect=40)
     cbar.set_label("Amplitude (µV)", rotation=270, labelpad=15, fontsize=14)
+
     return fig
 
 
@@ -494,6 +506,43 @@ def calcRate(bin_path, sh_list):
     return spike_rate
 
 
+def adjust_figure_for_legend(figure, legend, bottom_margin=0.05):
+    """
+    Adjust the figure height to make sure the legend fits.
+
+    Args:
+        figure (matplotlib.figure.Figure): The figure object.
+        legend (matplotlib.legend.Legend): The legend object.
+        bottom_margin (float): The desired margin below the legend in inches.
+    """
+    # Draw the canvas to get the final rendered size of the legend
+    figure.canvas.draw()
+
+    # Get the bounding box of the legend in pixels
+    legend_bbox = legend.get_window_extent()
+
+    # If the bottom of the legend is below the figure (y=0)
+    if legend_bbox.y0 < 0:
+        # Calculate the overflow in pixels
+        overflow_pixels = -legend_bbox.y0
+
+        # Get the figure's DPI (dots per inch)
+        dpi = figure.get_dpi()
+
+        # Calculate the required additional height in inches
+        margin_pixels = bottom_margin * dpi
+        required_height_increase = (overflow_pixels + margin_pixels) / dpi
+
+        # Get the current figure size in inches
+        current_width, current_height = figure.get_size_inches()
+
+        # Set the new figure size
+        figure.set_size_inches(current_width, current_height + required_height_increase)
+
+        # Optional: Redraw the figure to apply changes
+        figure.canvas.draw()
+
+
 def plotMultPDF(bin_list, sh_list, day_list):
     fig, ax = plt.subplots(figsize=(8, 5))
     n_pdf = len(bin_list)
@@ -513,12 +562,13 @@ def plotMultPDF(bin_list, sh_list, day_list):
     ax.set_title("Spike Amplitude Distribution Over Time", fontsize=16, pad=10)
 
     # Add a legend to identify the lines
-    ax.legend(title="Recording Day", fontsize=10)
+    legend = ax.legend(title="Recording Day", fontsize=10)
 
     # Remove top and right plot borders for a cleaner look
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-
+    adjust_figure_for_legend(fig, legend)
+    fig.tight_layout()
     return fig
 
 
@@ -587,7 +637,11 @@ def plotRateVsZ(bin_list, day_list, sh_list):
     even_divisor = 10  # z limits will be integer multiples of this value
 
     fig, axes = plt.subplots(
-        nrows=2, ncols=2, figsize=(12, 8), sharex=True, sharey=False
+        nrows=2,
+        ncols=2,
+        figsize=(0.5 + 1 * len(bin_list), 8),
+        sharex=True,
+        sharey=False,
     )
     fig.suptitle("Firing Rate vs Depth Across Days", fontsize=18)
 
@@ -654,62 +708,12 @@ def plotRateVsZ(bin_list, day_list, sh_list):
     bottom_ax.set_xlim([-0.5, n_meas - 0.5])
     bottom_ax.set_xticks(xt_range)
     bottom_ax.set_xticklabels(xt_labels)
-    fig.supxlabel("Recording Session Day", fontsize=14)
-    fig.supylabel("Distance from tip (µm)", fontsize=14)
+    fig.supxlabel("Recording Session Day", y=0.02, fontsize=14)
+    fig.supylabel("Distance from tip (µm)", x=0.08, fontsize=14)
     ax.tick_params(axis="both", labelsize=12)
     cbar = fig.colorbar(scatter, ax=axes.ravel().tolist(), pad=0.01, aspect=40)
     cbar.set_label("Spiking Rate (Hz)", rotation=270, labelpad=15, fontsize=14)
     return fig
-
-
-def get_run_folders(subject_folder):
-    day_folders = [
-        os.path.join(subject_folder, folder)
-        for folder in os.listdir(subject_folder)
-        if os.path.isdir(os.path.join(subject_folder, folder))
-        and ("SvyPrb" not in folder)
-        and ("old" not in folder)
-    ]
-
-    run_folders = []
-    for day_folder in day_folders:
-        possible_run_folders = [
-            os.path.join(day_folder, folder)
-            for folder in os.listdir(day_folder)
-            if npx.is_run_folder(folder)
-        ]
-        # find one with supercat
-        supercat_folders = [
-            folder for folder in possible_run_folders if "supercat" in folder
-        ]
-        if len(supercat_folders) > 1:
-            raise ValueError(
-                f"Multiple supercat folders found in {day_folder}: {supercat_folders}"
-            )
-        if len(supercat_folders) == 1:
-            run_folders.append(supercat_folders[0])
-        else:
-            # find catgt folders
-            catgt_folders = [
-                folder for folder in possible_run_folders if "catgt" in folder
-            ]
-            if len(catgt_folders) > 1:
-                raise ValueError(
-                    f"Multiple catgt folders found in {day_folder}: {catgt_folders}"
-                )
-            if len(catgt_folders) == 1:
-                run_folders.append(catgt_folders[0])
-            else:
-                if len(possible_run_folders) == 1:
-                    run_folders.append(possible_run_folders[0])
-                elif len(possible_run_folders) == 0:
-                    continue
-                else:
-                    raise ValueError(
-                        f"Multiple run folders found in {day_folder}: {possible_run_folders}"
-                    )
-    run_folders.sort()
-    return run_folders
 
 
 def get_available_shanks(binFullPath):
@@ -730,9 +734,9 @@ def get_available_shanks(binFullPath):
 def main():
     # samples for calling the above functions
     # note that the file paths, etc are specific, alter to match your data
-    subject_folder = r"D:\Psilocybin\Cohort_3\T22"
+    subject_folder = r"D:\Psilocybin\Cohort_1\T08"
     overwrite = False
-    save_dir = None  # os.path.join(subject_folder, "stability")  # None if show
+    save_dir = os.path.join(subject_folder, "stability")  # None if show
     save_type = "png"  # svg
     ks_version = "4"
     # TODO add drift later
@@ -822,12 +826,12 @@ def main():
                 fname1 = os.path.join(
                     save_dir, f"multi_shank_drift_imec{probe_num}.{save_type}"
                 )
-                fig1.savefig(fname1, dpi=300, format=save_type)
+                fig1.savefig(fname1, dpi=300, format=save_type, bbox_inches="tight")
 
                 fname2 = os.path.join(
                     save_dir, f"multi_spike_rate_depth_imec{probe_num}.{save_type}"
                 )
-                fig2.savefig(fname2, dpi=300, format=save_type)
+                fig2.savefig(fname2, dpi=300, format=save_type, bbox_inches="tight")
 
         fig3 = plotMultPDF(probe_bins, sh_list, updated_day_list)
         fig4 = plotSpikeRate(probe_bins, updated_day_list, sh_list)
@@ -835,11 +839,11 @@ def main():
             fname3 = os.path.join(
                 save_dir, f"multi_spike_amplitude_imec{probe_num}.{save_type}"
             )
-            fig3.savefig(fname3, dpi=300, format=save_type)
+            fig3.savefig(fname3, dpi=300, format=save_type, bbox_inches="tight")
             fname4 = os.path.join(
                 save_dir, f"multi_spike_rate_imec{probe_num}.{save_type}"
             )
-            fig4.savefig(fname4, dpi=300, format=save_type)
+            fig4.savefig(fname4, dpi=300, format=save_type, bbox_inches="tight")
         else:
             plt.show()
 
