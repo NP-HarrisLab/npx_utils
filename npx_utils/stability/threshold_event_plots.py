@@ -234,7 +234,7 @@ def calc_neighbor_sites(xc, zc, neigh_radius_um):
 
 
 def plotOne(drift_data):
-    plt.subplots(figsize=(6, 2))
+    fig, ax = plt.subplots(figsize=(6, 2))
     n_spike = drift_data.shape[0]
     skip_step = np.floor(n_spike / 50000) + 1
     plot_spikes = np.arange(0, n_spike, skip_step).astype(int)
@@ -253,6 +253,7 @@ def plotOne(drift_data):
         vmax=c_lim[1],
     )
     c = plt.colorbar()
+    return fig
 
 
 def plotMult(bin_list, drift_list, day_list):
@@ -372,8 +373,8 @@ def plotMult(bin_list, drift_list, day_list):
     bottom_ax.set_xticks(label_positions)
     bottom_ax.set_xticklabels(labels)
     # Add a single X-axis label for the whole figure
+    fig.supxlabel("Recording Day", y=0.02, fontsize=14)
     fig.supylabel("Distance from tip (µm)", x=0.08, fontsize=14)
-    fig.supxlabel("Recording Session", y=0.02, fontsize=14)
 
     cbar = fig.colorbar(scatter, ax=ax.ravel().tolist(), pad=0.01, aspect=40)
     cbar.set_label("Amplitude (µV)", rotation=270, labelpad=15, fontsize=14)
@@ -586,7 +587,7 @@ def plotSpikeRate(bin_list, day_list, sh_list):
     plt.scatter(day_list, spike_rates, s=3)
     plt.plot(trend_x, trend_y, marker=None, linewidth=1, linestyle="dashed")
     ax.tick_params(axis="both", labelsize=12)
-    plt.xlabel("Recording Session", fontsize=14)
+    plt.xlabel("Recording Day", fontsize=14)
     plt.ylabel("Spike Rate (Hz)", fontsize=14)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -708,7 +709,7 @@ def plotRateVsZ(bin_list, day_list, sh_list):
     bottom_ax.set_xlim([-0.5, n_meas - 0.5])
     bottom_ax.set_xticks(xt_range)
     bottom_ax.set_xticklabels(xt_labels)
-    fig.supxlabel("Recording Session Day", y=0.02, fontsize=14)
+    fig.supxlabel("Recording Day", y=0.02, fontsize=14)
     fig.supylabel("Distance from tip (µm)", x=0.08, fontsize=14)
     ax.tick_params(axis="both", labelsize=12)
     cbar = fig.colorbar(scatter, ax=axes.ravel().tolist(), pad=0.01, aspect=40)
@@ -734,13 +735,14 @@ def get_available_shanks(binFullPath):
 def main():
     # samples for calling the above functions
     # note that the file paths, etc are specific, alter to match your data
-    subject_folder = r"D:\Psilocybin\Cohort_1\T08"
+    subject_folder = r"D:\Psilocybin\Cohort_4\T24"
+    recordings = ["20250912_T24_site_test_halfsites"]  # if you dont want all recordings
+    implant_day = None  # if None date will go based on first recording day
     overwrite = False
-    save_dir = os.path.join(subject_folder, "stability")  # None if show
+    save_dir = None  # os.path.join(subject_folder, "stability")  # None if show
     save_type = "png"  # svg
     ks_version = "4"
     # TODO add drift later
-    b_recalc = True
     analysis_time_sec = (
         300  # readData extracts spikes in the last analysis_time_sec of the recording
     )
@@ -751,7 +753,7 @@ def main():
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
     # only affects plotting in plotMult raster plots
-    run_folders = get_run_folders(subject_folder)
+    run_folders = get_run_folders(subject_folder, day_folders=recordings)
     drift_list = np.zeros(len(run_folders) - 1)
     days = [
         datetime.strptime(
@@ -759,7 +761,12 @@ def main():
         )
         for run_folder in run_folders
     ]
-    day_list = [(day - days[0]).days for day in days]
+    if implant_day is None:
+        start_day = days[0]
+    else:
+        start_day = datetime.strptime(implant_day, "%Y%m%d")
+    day_list = [(day - start_day).days for day in days]
+
     # group folders by probes
     ks_folders = []
     for folder in run_folders:
@@ -773,9 +780,7 @@ def main():
             if probe_id in all_probe_folders
         }
 
-    pbar1 = tqdm(all_probe_folders, "Processing probes...", position=0)
-    for probe_num in pbar1:
-        pbar1.set_description(f"Processing probe {probe_num}")
+    for probe_num in tqdm(all_probe_folders, "Processing probes...", position=0):
         all_probe_ks_folders = all_probe_folders[probe_num]
         probe_ks_folders = npx.sglx.sglx_helpers.get_same_channel_positions(
             all_probe_ks_folders
@@ -797,44 +802,44 @@ def main():
         sh_list = get_available_shanks(probe_bins[0])
 
         for sh_ind in sh_list:
-            if b_recalc:
-                pbar2 = tqdm(
-                    probe_bins,
-                    desc=f"\tProcessing Shank {sh_ind}",
-                    leave=False,
-                    position=1,
+            for binFullPath in tqdm(
+                probe_bins,
+                desc=f"\tProcessing Shank {sh_ind}",
+                leave=False,
+                position=1,
+            ):
+                readData(
+                    binFullPath,
+                    sh_ind,
+                    analysis_time_sec,
+                    excl_chan,
+                    threshold,
+                    overwrite,
                 )
-                for binFullPath in pbar2:
-                    readData(
-                        binFullPath,
-                        sh_ind,
-                        analysis_time_sec,
-                        excl_chan,
-                        threshold,
-                        overwrite,
-                    )
         if len(probe_bins) == 1:
-            out_name = f"drift_data_sh{sh_ind}.npy"
-            drift_data = np.load(probe_bins[0].parent.joinpath(out_name))
-            plotOne(drift_data)
+            drift_path = getDriftDataPath(
+                probe_bins[0], sh_list[0]
+            )  # TODO update function
+            drift_data = np.load(probe_bins[0].parent.joinpath(drift_path))
+            fig1 = plotOne(drift_data)
 
         else:
             # load saved drift data and plot
             fig1 = plotMult(probe_bins, drift_list, updated_day_list)
-            fig2 = plotRateVsZ(probe_bins, updated_day_list, sh_list)
-            if save_dir is not None:
-                fname1 = os.path.join(
-                    save_dir, f"multi_shank_drift_imec{probe_num}.{save_type}"
-                )
-                fig1.savefig(fname1, dpi=300, format=save_type, bbox_inches="tight")
+        fig2 = plotRateVsZ(probe_bins, updated_day_list, sh_list)
+        if save_dir is not None:
+            fname1 = os.path.join(
+                save_dir, f"multi_shank_drift_imec{probe_num}.{save_type}"
+            )
+            fig1.savefig(fname1, dpi=300, format=save_type, bbox_inches="tight")
 
-                fname2 = os.path.join(
-                    save_dir, f"multi_spike_rate_depth_imec{probe_num}.{save_type}"
-                )
-                fig2.savefig(fname2, dpi=300, format=save_type, bbox_inches="tight")
+            fname2 = os.path.join(
+                save_dir, f"multi_spike_rate_depth_imec{probe_num}.{save_type}"
+            )
+            fig2.savefig(fname2, dpi=300, format=save_type, bbox_inches="tight")
 
         fig3 = plotMultPDF(probe_bins, sh_list, updated_day_list)
-        fig4 = plotSpikeRate(probe_bins, updated_day_list, sh_list)
+        # dfig4 = plotSpikeRate(probe_bins, updated_day_list, sh_list)
         if save_dir is not None:
             fname3 = os.path.join(
                 save_dir, f"multi_spike_amplitude_imec{probe_num}.{save_type}"

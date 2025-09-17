@@ -84,14 +84,20 @@ def get_details(ks_folder, drug_dict=None):
     return details
 
 
-def get_run_folders(subject_folder):
-    day_folders = [
-        os.path.join(subject_folder, folder)
-        for folder in os.listdir(subject_folder)
-        if os.path.isdir(os.path.join(subject_folder, folder))
-        and ("SvyPrb" not in folder)
-        and ("old" not in folder)
-    ]
+def get_run_folders(subject_folder, day_folders=None):
+    if day_folders is None:
+        day_folders = [
+            os.path.join(subject_folder, folder)
+            for folder in os.listdir(subject_folder)
+            if os.path.isdir(os.path.join(subject_folder, folder))
+            and ("SvyPrb" not in folder)
+            and ("old" not in folder)
+        ]
+    else:
+        day_folders = [
+            folder if os.path.isabs(folder) else os.path.join(subject_folder, folder)
+            for folder in day_folders
+        ]
 
     run_folders = []
     for day_folder in day_folders:

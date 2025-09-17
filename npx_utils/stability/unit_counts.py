@@ -34,8 +34,8 @@ def plot_subject_unit_counts(ks_folders, day_list):
 def main():
     # samples for calling the above functions
     # note that the file paths, etc are specific, alter to match your data
-    subject_folder = r"D:\Psilocybin\Cohort_1\T08"
-    overwrite = False
+    subject_folder = r"D:\Psilocybin\Cohort_3\T22"
+    implant_day = "20250708"  # if None date will go based on first recording day
     save_dir = os.path.join(subject_folder, "stability")  # None if show
     save_type = "png"  # svg
     ks_version = "4"
@@ -51,7 +51,11 @@ def main():
         )
         for run_folder in run_folders
     ]
-    day_list = [(day - days[0]).days for day in days]
+    if implant_day is None:
+        start_day = days[0]
+    else:
+        start_day = datetime.strptime(implant_day, "%Y%m%d")
+    day_list = [(day - start_day).days for day in days]
 
     # group folders by probes
     ks_folders = []
