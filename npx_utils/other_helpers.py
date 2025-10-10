@@ -53,7 +53,8 @@ def get_probe_folders(ks_folders):
         if probe_num not in probe_folders:
             probe_folders[probe_num] = []
         probe_folders[probe_num].append(ks_folder)
-    return probe_folders
+    sorted_dict = dict(sorted(probe_folders.items()))
+    return sorted_dict
 
 
 def get_details(ks_folder, drug_dict=None):

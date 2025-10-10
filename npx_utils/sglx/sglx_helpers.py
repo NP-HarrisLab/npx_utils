@@ -60,7 +60,7 @@ def get_data_memmap(bin_path, meta):
     nChan = int(meta["nSavedChans"])
     nFileSamp = int(int(meta["fileSizeBytes"]) / (2 * nChan))
     rawData = np.memmap(
-        bin_path, dtype="int16", mode="r", shape=(nChan, nFileSamp), offset=0, order="F"
+        bin_path, dtype="int16", mode="r", shape=(nFileSamp, nChan), offset=0, order="F"
     )
     return rawData
 
