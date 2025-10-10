@@ -36,51 +36,6 @@ def calc_sliding_RP_viol(
     return RP_viol
 
 
-def _sliding_RP_viol(
-    correlogram,
-    bin_size: float = 0.25,
-    acceptThresh: float = 0.1,
-) -> float:
-    """
-    Calculate the sliding refractory period violation confidence for a cluster.
-    Args:
-        correlogram (NDArray): The auto-correlogram of the cluster.
-        bin_size (float, optional): The size of each bin in ms. Defaults to 0.25.
-        acceptThresh (float, optional): The threshold for accepting refractory period violations. Defaults to 0.1.
-    Returns:
-        float: The refractory period violation confidence for the cluster.
-    """
-    # create various refractory periods sizes to test (between 0 and 20x bin size)
-    b = np.arange(0, 21 * bin_size, bin_size) / 1000
-    bTestIdx = np.array([1, 2, 4, 6, 8, 12, 16, 20], dtype="int8")
-    bTest = [b[i] for i in bTestIdx]
-
-    # calculate and avg halves of acg to ensure symmetry
-    # keep only second half of acg, refractory period violations are compared from the center of acg
-    half_len = int(correlogram.shape[0] / 2)
-    correlogram = (correlogram[half_len:] + correlogram[:half_len][::-1]) / 2
-
-    acg_cumsum = np.cumsum(correlogram)
-    sum_res = acg_cumsum[bTestIdx - 1]  # -1 bc 0th bin corresponds to 0-bin_size ms
-
-    # low-pass filter acg and use max as baseline event rate
-    order = 4  # Hz
-    cutoff_freq = 250  # Hz
-    fs = 1 / bin_size * 1000
-    nyqist = fs / 2
-    cutoff = cutoff_freq / nyqist
-    sos = butter(order, cutoff, btype="low", output="sos")
-    smoothed_acg = sosfiltfilt(sos, correlogram)
-
-    bin_rate_max = np.max(smoothed_acg)
-    max_conts_max = np.array(bTest) / bin_size * 1000 * (bin_rate_max * acceptThresh)
-    # compute confidence of less than acceptThresh contamination at each refractory period
-    confs = 1 - stats.poisson.cdf(sum_res, max_conts_max)
-    rp_viol = 1 - confs.max()
-
-    return rp_viol
-
-
 def auto_correlogram(
     c1_times: NDArray[np.float64],
     window_size: float,
@@ -131,6 +86,51 @@ def x_correlogram(
     """
 
     return _correlogram(c1_times, c2_times, window_size, bin_width, overlap_tol)
+
+
+def _sliding_RP_viol(
+    correlogram,
+    bin_size: float = 0.25,
+    acceptThresh: float = 0.1,
+) -> float:
+    """
+    Calculate the sliding refractory period violation confidence for a cluster.
+    Args:
+        correlogram (NDArray): The auto-correlogram of the cluster.
+        bin_size (float, optional): The size of each bin in ms. Defaults to 0.25.
+        acceptThresh (float, optional): The threshold for accepting refractory period violations. Defaults to 0.1.
+    Returns:
+        float: The refractory period violation confidence for the cluster.
+    """
+    # create various refractory periods sizes to test (between 0 and 20x bin size)
+    b = np.arange(0, 21 * bin_size, bin_size) / 1000
+    bTestIdx = np.array([1, 2, 4, 6, 8, 12, 16, 20], dtype="int8")
+    bTest = [b[i] for i in bTestIdx]
+
+    # calculate and avg halves of acg to ensure symmetry
+    # keep only second half of acg, refractory period violations are compared from the center of acg
+    half_len = int(correlogram.shape[0] / 2)
+    correlogram = (correlogram[half_len:] + correlogram[:half_len][::-1]) / 2
+
+    acg_cumsum = np.cumsum(correlogram)
+    sum_res = acg_cumsum[bTestIdx - 1]  # -1 bc 0th bin corresponds to 0-bin_size ms
+
+    # low-pass filter acg and use max as baseline event rate
+    order = 4  # Hz
+    cutoff_freq = 250  # Hz
+    fs = 1 / bin_size * 1000
+    nyqist = fs / 2
+    cutoff = cutoff_freq / nyqist
+    sos = butter(order, cutoff, btype="low", output="sos")
+    smoothed_acg = sosfiltfilt(sos, correlogram)
+
+    bin_rate_max = np.max(smoothed_acg)
+    max_conts_max = np.array(bTest) / bin_size * 1000 * (bin_rate_max * acceptThresh)
+    # compute confidence of less than acceptThresh contamination at each refractory period
+    confs = 1 - stats.poisson.cdf(sum_res, max_conts_max)
+    rp_viol = 1 - confs.max()
+
+    return rp_viol
 
 
 def _correlogram(

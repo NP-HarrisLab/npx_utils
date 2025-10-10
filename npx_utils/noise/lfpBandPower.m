@@ -82,7 +82,7 @@ bEnd = pk_bin_ind + 10*intWind;
 i = i + bStart;  % to index into the original array
 % fprintf( 'Chan 0 peak index: %d, peak freq: %.2f Hz \n', i(1), F(i(1)));
 
-[nChan,nPSDBin] = size(allPowerEst);
+% [nChan,nPSDBin] = size(allPowerEst);
 
 if measChan > 3
 
@@ -115,8 +115,8 @@ if measChan > 3
         peakInt = 0;
         bStart = i(currChan)-intWind;
         bEnd = i(currChan)+intWind;
-        if (bStart < 1) bStart = 1; end
-        if (bEnd > nPowerEst) bEnd = nPowerEst; end
+        if (bStart < 1), bStart = 1; end
+        if (bEnd > nPowerEst), bEnd = nPowerEst; end
         for f = bStart:bEnd
             peakInt = peakInt + allPowerEst(f,currChan) - backEst;
         end
@@ -127,8 +127,8 @@ if measChan > 3
 
         bStart = round(noiseRange(1)/hzSpan)+1;
         bEnd = round(noiseRange(2)/hzSpan)+1;
-        backSum = 0;
-        msgStr = sprintf( 'minPeakStart, maxPeakEnd: %d, %d\n', minPeakStart, maxPeakEnd );
+        % backSum = 0;
+        % msgStr = sprintf( 'minPeakStart, maxPeakEnd: %d, %d\n', minPeakStart, maxPeakEnd );
         %disp(msgStr)
         if (backSkipPeak == 1)
             if( bStart < minPeakStart ) && ( bEnd > maxPeakEnd )
@@ -150,7 +150,7 @@ if measChan > 3
                       
         else
            if( currChan == 1) 
-            [pxx_nf, pxx_nchan] = size(allPowerEst);
+            [pxx_nf, ~] = size(allPowerEst);
             fprintf('number of bins in power spectrum: %d\n ', pxx_nf);
             fprintf('range for backSum: %d, %d\n ', bStart, bEnd);
 
@@ -177,7 +177,7 @@ if measChan > 3
 %     end
     
     normPP = peakToPeakEst/mean(peakToPeakEst);
-    [filePath, currTitle, dumExt] = fileparts(lfpFilename);
+    [filePath, currTitle, ~] = fileparts(lfpFilename);
     currTitle = sprintf('%s_sh%d_b%d_t%d', currTitle, shank_index, bank_index, round(tStart,0));
     titleStr = sprintf( 'Data from: %s',currTitle);
 
