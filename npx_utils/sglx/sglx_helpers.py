@@ -1,7 +1,6 @@
 import os
 import re
 
-import cupy as cp
 import numpy as np
 from scipy.stats import mode
 
@@ -286,7 +285,7 @@ def GainCorrectNI(dataArray, chanList, meta):
         j = chanList[i]  # index in saved data
         conv = fI2V / ChanGainNI(j, MN, MA, meta)
         # dataArray contains only the channels in chanList
-        convArray[i, :] = dataArray[i, :] * conv
+        convArray[:, i] = dataArray[:, i] * conv
     return convArray
 
 
@@ -303,7 +302,7 @@ def GainCorrectOBX(dataArray, chanList, meta):
     convArray = np.zeros(dataArray.shape, dtype=float)
     for i in range(0, len(chanList)):
         # dataArray contains only the channels in chanList
-        convArray[i, :] = dataArray[i, :] * fI2V
+        convArray[:, i] = dataArray[:, i] * fI2V
     return convArray
 
 
@@ -356,5 +355,5 @@ def GainCorrectIM(dataArray, chanList, meta):
         else:
             conv = 1
         # The dataArray contains only the channels in chanList
-        convArray[i, :] = dataArray[i, :] * conv
+        convArray[:, i] = dataArray[:, i] * conv
     return convArray

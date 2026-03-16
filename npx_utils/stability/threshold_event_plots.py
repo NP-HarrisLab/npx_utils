@@ -54,7 +54,7 @@ from npx_utils.sglx.sglx_helpers import (
     get_sample_rate,
     read_meta,
 )
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 
 def getDriftDataPath(binFullPath, sh_index):

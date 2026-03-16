@@ -143,8 +143,7 @@ def plot_peak_heatmap(channel_positions, peak_channels):
     site_size = (12, 12)
 
     # 4. Setup plot
-    fig, ax = plt.subplots(figsize=(8, 12))
-    ax.set_aspect("equal")
+    fig, ax = plt.subplots(figsize=(8, 50))
     ax.set_title("Neuron Peak Channel Density", fontsize=16, pad=20)
 
     # 5. Draw shanks
@@ -189,7 +188,7 @@ def plot_peak_heatmap(channel_positions, peak_channels):
 
         # The channel_positions gives the center, so calculate the bottom-left corner
         bottom_left_x = x_pos - site_size[0] / 2
-        bottom_left_y = z_pos - site_size[1] / 2
+        bottom_left_y = z_pos + tip_length
 
         site = patches.Rectangle(
             (bottom_left_x, bottom_left_y),
@@ -213,6 +212,5 @@ def plot_peak_heatmap(channel_positions, peak_channels):
     ax.set_ylabel("Depth (µm)", fontsize=12)
     ax.set_xlim(-shank_pitch / 2, (num_shanks - 0.5) * shank_pitch)
     ax.set_ylim(-tip_length, shank_length * 1.05)
-    ax.invert_yaxis()
     fig.tight_layout()
     plt.show()
