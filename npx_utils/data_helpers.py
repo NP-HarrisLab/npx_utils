@@ -3,10 +3,17 @@ from typing import Any
 
 import cupy as cp
 import numpy as np
+from joblib import Parallel, delayed
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from npx_utils.sglx_helpers import get_bits_to_uV, get_data_memmap, read_meta
+from npx_utils.ks_helpers import get_binary_path, get_meta_path
+from npx_utils.sglx.sglx_helpers import (
+    get_bits_to_uV,
+    get_channel_counts,
+    get_data_memmap,
+    read_meta,
+)
 
 
 def extract_spikes(
@@ -36,8 +43,8 @@ def extract_spikes(
             spikes are extracted. Defaults to -1.
 
     Returns:
-        spikes (NDArray): Array of extracted spike waveforms with shape
-            (# of spikes, # of channels, # of timepoints).
+        spikes: Array of extracted spike waveforms
+            with shape (# of spikes, # of channels, # of timepoints).
     """
     times = times_multi[clust_id].astype("int64")
     # spikes cut off by the ends of the recording is handled in times_multi
@@ -76,13 +83,18 @@ def extract_all_spikes(
     pre_samples: int,
     post_samples: int,
     max_spikes: int,
+    n_jobs: int = -1,
 ):
-    spikes = {}
-    for clust_id in tqdm(clust_ids, "Extracting spikes..."):
-        spikes[clust_id] = extract_spikes(
+    """
+    Extracts spikes for all clusters in parallel.
+    """
+    results = Parallel(n_jobs=n_jobs, backend="threading")(
+        delayed(extract_spikes)(
             data, times_multi, clust_id, pre_samples, post_samples, max_spikes
         )
-    return spikes
+        for clust_id in tqdm(clust_ids, "Extracting spikes...")
+    )
+    return dict(zip(clust_ids, results))
 
 
 def calc_mean_wf(
@@ -91,6 +103,7 @@ def calc_mean_wf(
     cluster_ids: list[int],
     times_multi: dict[NDArray[np.int_]],
     data: NDArray[np.int_],
+    all_spikes: dict[int, NDArray] = None,
 ) -> NDArray:
     """
     Calculate mean waveform and std waveform for each cluster. Need to have loaded some metrics. If return_spikes is True, also returns the spike waveforms.
@@ -102,11 +115,10 @@ def calc_mean_wf(
         cluster_ids (list): List of cluster ids to calculate waveforms for.
         times_multi (dict): Dictionary of spike times indexed by cluster id.
         data (NDArray): Ephys data with shape (n_timepoints, n_channels).
+        all_spikes (dict): Optional dictionary of spike waveforms for each cluster.
 
     Returns:
         NDArray: Mean waveforms for each cluster (uV). Shape (n_clusters, n_channels, pre_samples + post_samples) dtype float32
-        NDArray: Std waveforms for each cluster (uV). Shape (n_clusters, n_channels, pre_samples + post_samples) dtype float32
-        dict[int, NDArray]: Spike waveforms for each cluster (bits). NDArray shape (n_spikes, n_channels, pre_samples + post_samples) dtype int16
     """
     mean_wf_path = os.path.join(params["KS_folder"], "mean_waveforms.npy")
 
@@ -128,32 +140,38 @@ def calc_mean_wf(
             params["pre_samples"] + params["post_samples"],
         )
     )
-    for i in tqdm(cluster_ids, desc="Calculating mean waveforms"):
-        spikes = extract_spikes(
+
+    if all_spikes is None:
+        all_spikes = extract_all_spikes(
             data,
             times_multi,
-            i,
+            cluster_ids,
             params["pre_samples"],
             params["post_samples"],
             params["max_spikes"],
         )
-        if len(spikes) > 0:  # edge case
-            spikes_cp = cp.array(spikes, dtype=cp.float32)
-            mean_wf[i, :, :] = cp.mean(spikes_cp, axis=0)
+        for i in tqdm(cluster_ids, desc="Calculating mean waveforms"):
+            spikes = all_spikes[i]
+            if len(spikes) > 0:  # edge case
+                spikes_cp = cp.array(spikes, dtype=cp.float32)
+                mean_wf[i, :, :] = cp.mean(spikes_cp, axis=0)
 
     # convert mean_wf uV
     meta = read_meta(params["meta_path"])
-    bits_to_uV = get_bits_to_uV(meta)  # convert from bits to uV
-    bits_to_uV = cp.float32(bits_to_uV)  # convert to cupy float32
-    mean_wf *= bits_to_uV
+    nAP = get_channel_counts(meta)[0]
+    bits_to_uV = get_bits_to_uV(np.arange(nAP), meta)
+    bits_to_uV = cp.array(bits_to_uV)
+    # kept sync on current mean_wf so just add 1 to bits_to_uV
+    bits_to_uV = cp.append(bits_to_uV, 1)
+    mean_wf_uV = mean_wf * bits_to_uV[cp.newaxis, :, cp.newaxis]
 
     tqdm.write("Saving mean waveforms...")
-    cp.save(mean_wf_path, mean_wf)
+    cp.save(mean_wf_path, mean_wf_uV)
 
     # Convert back to numpy arrays for compatibility
-    mean_wf = cp.asnumpy(mean_wf)
+    mean_wf_uV = cp.asnumpy(mean_wf_uV)
 
-    return mean_wf
+    return mean_wf_uV
 
 
 def calc_mean_wf_split(
@@ -163,6 +181,7 @@ def calc_mean_wf_split(
     times_multi: dict[NDArray[np.int_]],
     data: NDArray[np.int_],
     n_splits: int = 2,
+    all_spikes: dict[int, NDArray] = None,
 ):
     if n_splits < 2:
         raise ValueError("n_splits must be at least 2. Otherwise use calc_mean_wf.")
@@ -192,15 +211,17 @@ def calc_mean_wf_split(
             n_splits,
         )
     )
-    for i in tqdm(cluster_ids, desc="Calculating mean waveforms"):
-        spikes = extract_spikes(
+    if all_spikes is None:
+        all_spikes = extract_all_spikes(
             data,
             times_multi,
-            i,
+            cluster_ids,
             params["pre_samples"],
             params["post_samples"],
             params["max_spikes"],
         )
+    for i in tqdm(cluster_ids, desc="Calculating mean waveforms"):
+        spikes = all_spikes[i]
         if len(spikes) > 0:  # edge case
             spikes_cp = cp.array(spikes, dtype=cp.float32)
             for split in range(n_splits):
@@ -212,17 +233,20 @@ def calc_mean_wf_split(
 
     # convert mean_wf uV
     meta = read_meta(params["meta_path"])
-    bits_to_uV = get_bits_to_uV(meta)  # convert from bits to uV
-    bits_to_uV = cp.float32(bits_to_uV)  # convert to cupy float32
-    mean_wf *= bits_to_uV
+    nAP = get_channel_counts(meta)[0]
+    bits_to_uV = get_bits_to_uV(np.arange(nAP), meta)
+    bits_to_uV = cp.array(bits_to_uV)
+    # kept sync on current mean_wf so just add 1 to bits_to_uV
+    bits_to_uV = cp.append(bits_to_uV, 1)
+    mean_wf_uV = mean_wf * bits_to_uV[cp.newaxis, :, cp.newaxis, cp.newaxis]
 
     tqdm.write("Saving mean waveforms...")
-    cp.save(mean_wf_path, mean_wf)
+    cp.save(mean_wf_path, mean_wf_uV)
 
     # Convert back to numpy arrays for compatibility
-    mean_wf = cp.asnumpy(mean_wf)
+    mean_wf_uV = cp.asnumpy(mean_wf_uV)
 
-    return mean_wf
+    return mean_wf_uV
 
 
 def find_times_multi_ks(
@@ -233,7 +257,10 @@ def find_times_multi_ks(
 ):
     sp_times = np.load(os.path.join(ks_folder, "spike_times.npy"))
     sp_clust = np.load(os.path.join(ks_folder, "spike_clusters.npy"))
-    data = get_data_memmap(ks_folder)
+    meta_path = get_meta_path(ks_folder)
+    meta = read_meta(meta_path)
+    bin_path = get_binary_path(ks_folder)
+    data = get_data_memmap(bin_path, meta)
     if clust_ids is None:
         clust_ids = np.arange(np.max(sp_clust) + 1)
 

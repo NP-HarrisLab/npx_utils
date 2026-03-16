@@ -3,15 +3,16 @@ import re
 from tkinter import Tk, filedialog
 
 import matplotlib.pyplot as plt
-import npx_utils as npx
 import numpy as np
 from scipy.signal import welch
+
+import npx_utils as npx
 
 
 def _my_time_power_spectrum_mat(x, fs):
     """
-        Helper function to calculate the power spectrum using Welch's method.
-    \ """
+    Helper function to calculate the power spectrum using Welch's method.
+    """
     L = x.shape[0]
     # get the next power of 2
     nfft = 1 << (L - 1).bit_length()
@@ -292,13 +293,13 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
         print(f"Meta file {meta_file} does not exist. Exiting.")
         return
     meta = npx.read_meta(meta_file)
-    bank_times = npx.get_svy_bank_times(meta)
+    bank_times = npx.sglx_helpers.get_svy_bank_times(meta)
 
-    fs = npx.get_sample_rate(meta)
+    fs = npx.sglx_helpers.get_sample_rate(meta)
     n_chans_in_file = int(meta["nSavedChans"])
     if meta["typeThis"] == "imec":
-        [ap_gain, lf_gain, _, _] = npx.get_chan_gains_imec(meta)
-        [ap, _, _] = npx.get_chan_counts_imec(meta)
+        [ap_gain, lf_gain, _, _] = npx.sglx.sglx_helpers.ChanGainsIM(meta)
+        [ap, _, _] = npx.sglx_helpers.get_channel_counts(meta)
         n_chans = ap
         if stream == "ap":
             gain = ap_gain[0]
@@ -314,8 +315,8 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
             freq_bands = [[0.5, 1000]]
             noise_range = (0.5, 1000)
     elif meta["typeThis"] == "nidq":
-        gain = npx.get_chan_gains_ni(meta)
-        [_, _, n_chans, _] = npx.get_chan_counts_ni(meta)
+        gain = npx.sglx_helpers.ChanGainNI(meta)
+        [_, _, n_chans, _] = npx.sglx_helpers.get_channel_counts(meta)
         skip_chan = []
         disp_range = (0.5, 15000)
         marginal_chans = [0]
@@ -323,7 +324,7 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
         noise_range = (0.001, 500)
     elif meta["typeThis"] == "obx":
         gain = 1
-        [_, n_chans, _] = npx.get_chan_counts_obx(meta)
+        [_, n_chans, _] = npx.sglx_helpers.get_channel_counts(meta)
         skip_chan = []
         disp_range = (0.5, 15000)
         marginal_chans = [0]
@@ -332,14 +333,12 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
     else:
         raise ValueError("Unknown stream type in metadata.")
 
-    tomV = 1e3 * (npx.int2volts(meta) / gain)
+    tomV = 1e3 * (npx.sglx_helpers.Int2Volts(meta) / gain)
 
     # Get disabled channels from the metadata
     skip_chan = []
     if meta["typeThis"] == "imec":
-        # Use regex to parse the shank map string, similar to MATLAB's textscan
         shank_map_str = meta.get("snsShankMap", meta.get("snsGeomMap"))
-        # Matches tuples like (c:h:a:n) and captures the 4th number (enabled flag)
         matches = re.findall(r"\(\d+:\d+:\d+:(\d)\)", shank_map_str)
         if matches:
             enabled = np.array([int(m) for m in matches])
@@ -349,7 +348,6 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
     nclips = 3
     n_banks = 1 if type(bank_times) == int else len(bank_times)
 
-    # --- 4. Run Analysis ---
     if n_banks > 1:
         for k in range(n_banks):
             t_start = bank_times[k, 3] + 200
@@ -445,13 +443,10 @@ def lfp_band_power(run_dir=None, stream="ap", prb_ind=0, peak_pos_hz=1000, plot=
         #     ax2.set_xlim(disp_range)
 
         # plt.show()
+    else:
+        fig = None
 
     return ptp_mean, ptp_std, noise_mean, noise_std, fig
-
-import os
-import re
-
-from lfp_power import lfp_band_power
 
 
 def find_match_dir(search_path, pattern):
@@ -459,6 +454,9 @@ def find_match_dir(search_path, pattern):
     Finds subdirectories within a given path that match a regex pattern.
     """
     pattern = re.compile(pattern)
+    # check if search_path matches the pattern itself
+    if pattern.search(search_path):
+        return [search_path]
     subdirs = []
     for dirpath, dirnames, filenames in os.walk(search_path):
         for dirname in dirnames:
@@ -472,21 +470,21 @@ def run_noise(base_path, stream="ap", peak_pos_hz=1000, overwrite=False, plot=Tr
     Main function to run the batch analysis.
     """
     # --- Start Processing ---
-    # Find all run folders (e.g., matching '_g' followed by digits)
+    # Find all run folders (e.g., matching '_g' followed by digits), including the base path itself
     run_folders = find_match_dir(base_path, r"_g\d+$")
 
     for run_name in run_folders:
         run_dir = os.path.join(base_path, run_name)
 
         print(f"Processing: {run_dir}")
-        # Find all probe folders within the run folder (e.g., matching '_imec' followed by digits)
+        # Find all probe folders
         probe_folders = find_match_dir(run_dir, r"_imec\d+$")
 
         for probe_dir_name in probe_folders:
-            # Extract the probe number using a regex group
+            # Extract the probe number
             match = re.search(r"_imec(\d+)$", probe_dir_name)
             if not match:
-                continue  # Skip if the folder name is malformed
+                continue
 
             probe_num = int(match.group(1))
             print(f"\tProbe {probe_num}")
@@ -499,24 +497,24 @@ def run_noise(base_path, stream="ap", peak_pos_hz=1000, overwrite=False, plot=Tr
                 print(f"\t\tOutput exists. Skipping.")
                 continue
 
-            # Call the main analysis function
-            # try:
             (_, _, noise_mean, noise_std, fig1) = lfp_band_power(
-                run_dir, stream, probe_num, peak_pos_hz, True
+                run_dir, stream, probe_num, peak_pos_hz, plot
             )
 
             # Save the numerical results to a text file
-            # The 'with' statement automatically handles closing the file
             with open(output_path, "w") as f:
                 result_str = f"noise mean & std: {noise_mean:.2f}, {noise_std:.2f}\n"
                 print(f"\t\t{result_str.strip()}")
                 f.write(result_str)
 
-            # Save the figure generated by the analysis function
-            fig_path = os.path.join(run_dir, f"{probe_dir_name}_spectra.png")
+            if plot:
+                fig_path = os.path.join(run_dir, f"{probe_dir_name}_spectra.png")
+                fig1.savefig(fig_path, dpi=300)
+                print(f"\t\tSaved results to {output_name} and plot {fig_path}.")
+            else:
+                print(f"\t\tSaved results to {output_name}.")
 
-            fig1.savefig(fig_path, dpi=300)
-            print(f"\t\tSaved results to {output_name} and spectra PNG.")
 
-            # except Exception as e:
-            #     print(f"\t\tERROR processing {probe_dir_name}: {e}")
+if __name__ == "__main__":
+    base_path = r"Z:\SalineTests\23107805413\20250818_23107805413_saline_ext_g0"
+    run_noise(base_path, stream="ap", peak_pos_hz=1000, overwrite=True, plot=True)
